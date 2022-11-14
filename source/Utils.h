@@ -172,5 +172,19 @@ namespace dae
 #endif
 		}
 #pragma warning(pop)
+		inline bool IsInTriangle(const Vector2& point, const Vector2& v0, const Vector2& v1, const Vector2& v2)
+		{
+			Vector2 edgeA{ v1 - v0 };
+			if (Vector2::Cross(edgeA, point - v0) < 0)
+				return false;
+			Vector2 edgeB{ v2 - v1 };
+			if (Vector2::Cross(edgeB, point - v1) < 0)
+				return false;
+			Vector2 edgeC{ v0 - v2 };
+			if (Vector2::Cross(edgeC, point - v2) < 0)
+				return false;
+
+			return true;
+		}
 	}
 }

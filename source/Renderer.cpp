@@ -9,6 +9,8 @@
 #include "Texture.h"
 #include "Utils.h"
 
+#define S_C(type,value) static_cast<type>(value)
+
 using namespace dae;
 
 Renderer::Renderer(SDL_Window* pWindow) :
@@ -44,16 +46,33 @@ void Renderer::Render()
 	//Lock BackBuffer
 	SDL_LockSurface(m_pBackBuffer);
 
+	// Define Triangle - Vertices in NDC space
+	std::vector<Vector3> vertices_ndc
+	{
+		{ .0f, .5f, 1.f },
+		{ .5f, -.5f, 1.f },
+		{ -.5f, -.5f, 1.f }
+	};
+
+	std::vector<Vector2> verticesRaster{};
+
+	for (const Vector3& vertex_ndc : vertices_ndc)
+	{
+		// Formula from slides
+		// NDC --> Screenspace
+		verticesRaster.push_back({(vertex_ndc.x + 1) / 2.0f * m_Width,(1.0f - vertex_ndc.y) / 2.0f * m_Height});
+	}
+
 	//RENDER LOGIC
 	for (int px{}; px < m_Width; ++px)
 	{
 		for (int py{}; py < m_Height; ++py)
 		{
-			float gradient = px / static_cast<float>(m_Width);
-			gradient += py / static_cast<float>(m_Width);
-			gradient /= 2.0f;
 
-			ColorRGB finalColor{ gradient, gradient, gradient };
+			Vector2 currentPixel{ S_C(float,px),S_C(float,py) };
+
+			bool hitTriangle{ Utils::IsInTriangle(currentPixel,verticesRaster[0],verticesRaster[1],verticesRaster[2]) };
+			ColorRGB finalColor{hitTriangle,hitTriangle,hitTriangle};
 
 			//Update Color in Buffer
 			finalColor.MaxToOne();
