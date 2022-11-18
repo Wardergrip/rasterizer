@@ -86,18 +86,37 @@ void Renderer::Render()
 	// For each triangle
 	for (int currStartVertIdx{}; currStartVertIdx < vertices_world.size(); currStartVertIdx += 3)
 	{ 
-		// For each pixel
-		for (int px{}; px < m_Width; ++px)
+		Vector2 topLeft{ FLT_MAX, FLT_MAX};
+		Vector2 botRight{ FLT_MIN, FLT_MIN};
+		for (int i{ currStartVertIdx }; i < currStartVertIdx + 3; ++i)
 		{
-			for (int py{}; py < m_Height; ++py)
+			topLeft.x = std::min(topLeft.x, verticesRaster[i].x);
+			topLeft.y = std::min(topLeft.y, verticesRaster[i].y);
+			botRight.x = std::max(botRight.x, verticesRaster[i].x);
+			botRight.y = std::max(botRight.y, verticesRaster[i].y);
+		}
+		topLeft.x = Clamp(topLeft.x, 0.f, static_cast<float>(m_Width));
+		topLeft.y = Clamp(topLeft.y, 0.f, static_cast<float>(m_Height));
+		botRight.x = Clamp(botRight.x, 0.f, static_cast<float>(m_Width));
+		botRight.y = Clamp(botRight.y, 0.f, static_cast<float>(m_Height));
+
+		const int startX{ static_cast<int>(topLeft.x) };
+		const int endX{ static_cast<int>(botRight.x) };
+		const int startY{ static_cast<int>(topLeft.y) };
+		const int endY{ static_cast<int>(botRight.y) };
+
+		// For each pixel
+		for (int px{startX}; px < endX; ++px)
+		{
+			for (int py{startY}; py < endY; ++py)
 			{
 				const Vector2 currentPixel{ static_cast<float>(px),static_cast<float>(py) };
 				const int pixelIdx{ px + py * m_Width };
-				ColorRGB finalColor{};
 				// Cross products go to waste, optimalisation is possible
 				const bool hitTriangle{ Utils::IsInTriangle(currentPixel,verticesRaster[currStartVertIdx + 0],verticesRaster[currStartVertIdx + 1],verticesRaster[currStartVertIdx + 2]) };
 				if (hitTriangle)
 				{
+					ColorRGB finalColor{};
 					// weights
 					float weight0, weight1, weight2;
 					weight0 = Vector2::Cross((currentPixel - verticesRaster[currStartVertIdx + 1]),(verticesRaster[currStartVertIdx + 1]-verticesRaster[currStartVertIdx + 2]));
@@ -117,16 +136,14 @@ void Renderer::Render()
 					m_pDepthBufferPixels[pixelIdx] = depthValue;
 					
 					finalColor = { weight0 * vertices_world[currStartVertIdx + 0].color + weight1 * vertices_world[currStartVertIdx + 1].color + weight2 * vertices_world[currStartVertIdx + 2].color};
+					//Update Color in Buffer
+					finalColor.MaxToOne();
+
+					m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
+						static_cast<uint8_t>(finalColor.r * 255),
+						static_cast<uint8_t>(finalColor.g * 255),
+						static_cast<uint8_t>(finalColor.b * 255));
 				}
-				//finalColor = {static_cast<float>(hitTriangle),static_cast<float>(hitTriangle),static_cast<float>(hitTriangle)};
-
-				//Update Color in Buffer
-				finalColor.MaxToOne();
-
-				m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
-					static_cast<uint8_t>(finalColor.r * 255),
-					static_cast<uint8_t>(finalColor.g * 255),
-					static_cast<uint8_t>(finalColor.b * 255));
 			}
 		}
 	}
