@@ -114,19 +114,19 @@ namespace dae
 #pragma region KeyboardOnly Controls
 			if (pKeyboardState[SDL_SCANCODE_W] || pKeyboardState[SDL_SCANCODE_UP])
 			{
-				origin += forward * movementSpeed;
+				origin += forward * movementSpeed * deltaTime;
 			}
 			else if (pKeyboardState[SDL_SCANCODE_S] || pKeyboardState[SDL_SCANCODE_DOWN])
 			{
-				origin -= forward * movementSpeed;
+				origin -= forward * movementSpeed * deltaTime;
 			}
 			if (pKeyboardState[SDL_SCANCODE_D] || pKeyboardState[SDL_SCANCODE_RIGHT])
 			{
-				origin += right * movementSpeed;
+				origin += right * movementSpeed * deltaTime;
 			}
 			else if (pKeyboardState[SDL_SCANCODE_A] || pKeyboardState[SDL_SCANCODE_LEFT])
 			{
-				origin -= right * movementSpeed;
+				origin -= right * movementSpeed * deltaTime;
 			}
 #pragma endregion 
 
