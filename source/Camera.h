@@ -33,7 +33,7 @@ namespace dae
 		Matrix invViewMatrix{};
 		Matrix viewMatrix{};
 
-		float baseMovementSpeed{ 0.5 };
+		float baseMovementSpeed{ 15 };
 		float speedMultiplier{ 4 };
 
 		void Initialize(float _fovAngle = 90.f, Vector3 _origin = {0.f,0.f,0.f})
