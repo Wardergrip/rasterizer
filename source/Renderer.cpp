@@ -242,9 +242,9 @@ void dae::Renderer::RenderMeshTriangle(const Mesh& mesh, const std::vector<Vecto
 				weight1 *= invTotalTriangleArea;
 				weight2 *= invTotalTriangleArea;
 
-				const float depth0{ (m_Camera.origin - mesh.vertices[vertIdx0].position).SqrMagnitude() };
-				const float depth1{ (m_Camera.origin - mesh.vertices[vertIdx1].position).SqrMagnitude() };
-				const float depth2{ (m_Camera.origin - mesh.vertices[vertIdx2].position).SqrMagnitude() };
+				const float depth0{ vertices_ndc[vertIdx0].position.z };
+				const float depth1{ vertices_ndc[vertIdx1].position.z };
+				const float depth2{ vertices_ndc[vertIdx2].position.z };
 				const float interpolatedDepth{1.f / (weight0 * (1.f / depth0) + weight1 * (1.f / depth1) + weight2 * (1.f / depth2))};
 				if (m_pDepthBufferPixels[pixelIdx] < interpolatedDepth) continue;
 
