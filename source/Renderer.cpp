@@ -11,8 +11,6 @@
 
 #include <iostream>
 
-//#define USE_VERTEX_COLORS
-
 using namespace dae;
 
 Renderer::Renderer(SDL_Window* pWindow) :
@@ -20,8 +18,6 @@ Renderer::Renderer(SDL_Window* pWindow) :
 {
 	//Initialize
 	SDL_GetWindowSize(pWindow, &m_Width, &m_Height);
-
-	m_AspectRatio = static_cast<float>(m_Width) / static_cast<float>(m_Height);
 
 	//Create Buffers
 	m_pFrontBuffer = SDL_GetWindowSurface(pWindow);
@@ -32,10 +28,14 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	ResetDepthBuffer();
 
 	//Initialize Camera
-	m_Camera.Initialize(60.f, { .0f,.0f,-10.f });
+	m_Camera.Initialize(60.f, { .0f,.5f,-30.f }, static_cast<float>(m_Width) / m_Height);
 
 	//Initialize Texture
-	m_pTexture = Texture::LoadFromFile("Resources/uv_grid_2.png");
+	m_pTexture = Texture::LoadFromFile("Resources/tuktuk.png");
+
+	//Initialize Mesh
+	m_pMesh = new Mesh();
+	Utils::ParseOBJ("Resources/tuktuk.obj", m_pMesh->vertices, m_pMesh->indices);
 }
 
 Renderer::~Renderer()
@@ -43,11 +43,23 @@ Renderer::~Renderer()
 	delete[] m_pDepthBufferPixels;
 	delete m_pTexture;
 	m_pTexture = nullptr;
+	delete m_pMesh;
+	m_pMesh = nullptr;
 }
 
 void Renderer::Update(Timer* pTimer)
 {
 	m_Camera.Update(pTimer);
+	m_pMesh->RotateY(pTimer->GetElapsed());
+
+	const uint8_t* pKeyboardState = SDL_GetKeyboardState(nullptr);
+
+	if (pKeyboardState[SDL_SCANCODE_F4])
+	{
+		if (!m_F6Held) NextRenderMode();
+		m_F6Held = true;
+	}
+	else m_F6Held = false;
 }
 
 void Renderer::Render()
@@ -56,39 +68,43 @@ void Renderer::Render()
 	//Lock BackBuffer
 	SDL_LockSurface(m_pBackBuffer);
 
+	VertexTranformationFunction(*m_pMesh);
+
 	// Define Triangles - Vertices in WORLD space
-	std::vector<Mesh> meshes_world
-	{
-		Mesh
-		{
-			{
-				Vertex{{-3,3,-2},colors::White,{0,0}},
-				Vertex{{0,3,-2},colors::White,{.5,0}},
-				Vertex{{3,3,-2},colors::White,{1,0}},
-
-				Vertex{{-3,0,-2},colors::White,{0,0.5}},
-				Vertex{{0,0,-2},colors::White,{.5,.5}},
-				Vertex{{3,0,-2},colors::White,{1,.5}},
-
-				Vertex{{-3,-3,-2},colors::White,{0,1}},
-				Vertex{{0,-3,-2},colors::White,{.5,1}},
-				Vertex{{3,-3,-2},colors::White,{1,1}}
-			},
-			{
-				3,0,4,1,5,2,
-				2,6,
-				6,3,7,4,8,5
-			},
-			PrimitiveTopology::TriangleStrip
-			/*{
-				3,0,1,	1,4,3,	4,1,2,
-				2,5,4,	6,3,4,	4,7,6,
-				7,4,5,	5,8,7
-			},
-			PrimitiveTopology::TriangleList*/
-			
-		}
-	};
+	std::vector<Mesh> meshes_world;
+	// can be optimised
+	meshes_world.push_back(*m_pMesh);
+	//{
+	//	Mesh
+	//	{
+	//		{
+	//			Vertex{{-3,3,-2},colors::White,{0,0}},
+	//			Vertex{{0,3,-2},colors::White,{.5,0}},
+	//			Vertex{{3,3,-2},colors::White,{1,0}},
+	//
+	//			Vertex{{-3,0,-2},colors::White,{0,0.5}},
+	//			Vertex{{0,0,-2},colors::White,{.5,.5}},
+	//			Vertex{{3,0,-2},colors::White,{1,.5}},
+	//
+	//			Vertex{{-3,-3,-2},colors::White,{0,1}},
+	//			Vertex{{0,-3,-2},colors::White,{.5,1}},
+	//			Vertex{{3,-3,-2},colors::White,{1,1}}
+	//		},
+	//		{
+	//			3,0,4,1,5,2,
+	//			2,6,
+	//			6,3,7,4,8,5
+	//		},
+	//		PrimitiveTopology::TriangleStrip
+	//		/*{
+	//			3,0,1,	1,4,3,	4,1,2,
+	//			2,5,4,	6,3,4,	4,7,6,
+	//			7,4,5,	5,8,7
+	//		},
+	//		PrimitiveTopology::TriangleList*/
+	//		
+	//	}
+	//};
 
 	// For each mesh
 	for (const auto& mesh : meshes_world)
@@ -152,7 +168,7 @@ void Renderer::VertexTransformationFunction(const std::vector<Vertex>& vertices_
 	{
 		vertex.position = m_Camera.invViewMatrix.TransformPoint(vertex.position);
 
-		vertex.position.x = (vertex.position.x / (m_AspectRatio * m_Camera.fov)) / vertex.position.z;
+		vertex.position.x = (vertex.position.x / (m_Camera.aspectRatio * m_Camera.fov)) / vertex.position.z;
 		vertex.position.y = (vertex.position.y / m_Camera.fov) / vertex.position.z;
 
 		// Move instead of copy --> we made a copy already
@@ -179,6 +195,28 @@ void Renderer::VertexTransformationFunction(const std::vector<Mesh>& meshes_in, 
 	}
 }
 
+void dae::Renderer::VertexTranformationFunction(Mesh& mesh)
+{
+	Matrix worldViewProjectionMatrix{ mesh.worldMatrix * m_Camera.viewMatrix * m_Camera.projectionMatrix };
+	mesh.vertices_out.clear();
+	mesh.vertices_out.reserve(mesh.vertices.size());
+
+	for (const Vertex& v : mesh.vertices)
+	{
+		Vertex_Out vertex_out{ Vector4{}, v.color, v.uv, v.normal, v.tangent };
+
+		vertex_out.position = worldViewProjectionMatrix.TransformPoint({ v.position, 1.0f });
+
+		const float invVw{1/vertex_out.position.w};
+		vertex_out.position.x *= invVw;
+		vertex_out.position.y *= invVw;
+		vertex_out.position.z *= invVw;
+
+		// emplace back because we made vOut just to store in this vector
+		mesh.vertices_out.emplace_back(vertex_out);
+	}
+}
+
 void dae::Renderer::RenderMeshTriangle(const Mesh& mesh, const std::vector<Vector2>& vertices_raster, const std::vector<Vertex>& vertices_ndc, int currStartVertIdx, bool swapVertices)
 {
 	const size_t vertIdx0{mesh.indices[currStartVertIdx + (2 * swapVertices)] };
@@ -187,6 +225,10 @@ void dae::Renderer::RenderMeshTriangle(const Mesh& mesh, const std::vector<Vecto
 
 	// If a triangle has the same vertex twice, it means it has no surface and can't be rendered.
 	if (vertIdx0 == vertIdx1 || vertIdx1 == vertIdx2 || vertIdx2 == vertIdx0)
+	{
+		return;
+	}
+	if (m_Camera.ShouldVertexBeClipped(mesh.vertices_out[vertIdx0].position) || m_Camera.ShouldVertexBeClipped(mesh.vertices_out[vertIdx1].position) || m_Camera.ShouldVertexBeClipped(mesh.vertices_out[vertIdx2].position))
 	{
 		return;
 	}
@@ -246,15 +288,25 @@ void dae::Renderer::RenderMeshTriangle(const Mesh& mesh, const std::vector<Vecto
 				const float depth1{ vertices_ndc[vertIdx1].position.z };
 				const float depth2{ vertices_ndc[vertIdx2].position.z };
 				const float interpolatedDepth{1.f / (weight0 * (1.f / depth0) + weight1 * (1.f / depth1) + weight2 * (1.f / depth2))};
-				if (m_pDepthBufferPixels[pixelIdx] < interpolatedDepth) continue;
+				if (m_pDepthBufferPixels[pixelIdx] < interpolatedDepth || interpolatedDepth < 0.f || interpolatedDepth > 1.f) continue;
 
 				m_pDepthBufferPixels[pixelIdx] = interpolatedDepth;
 
-#ifdef USE_VERTEX_COLORS
-				finalColor = { weight0 * mesh.vertices[vertIdx0].color + weight1 * mesh.vertices[vertIdx1].color + weight2 * mesh.vertices[vertIdx2].color };
-#else 
-				finalColor = m_pTexture->Sample(interpolatedDepth * ((weight0 * mesh.vertices[vertIdx0].uv) / depth0 + (weight1 * mesh.vertices[vertIdx1].uv) / depth1 + (weight2 * mesh.vertices[vertIdx2].uv) / depth2));
-#endif
+				switch (m_RenderMode)
+				{
+				case dae::Renderer::RenderMode::Default:
+					finalColor = m_pTexture->Sample(interpolatedDepth * ((weight0 * mesh.vertices[vertIdx0].uv) / depth0 + (weight1 * mesh.vertices[vertIdx1].uv) / depth1 + (weight2 * mesh.vertices[vertIdx2].uv) / depth2));
+					break;
+				case dae::Renderer::RenderMode::Depth:
+				{
+					const float depthCol{ Remap(interpolatedDepth,0.985f,1.f) };
+					finalColor = { depthCol,depthCol,depthCol };
+				}
+					break;
+				case dae::Renderer::RenderMode::END:
+					std::cout << "Something went terribly wrong, Rendermode is END\n";
+					break;
+				}
 				//Update Color in Buffer
 				finalColor.MaxToOne();
 

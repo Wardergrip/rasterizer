@@ -33,7 +33,17 @@ namespace dae
 
 		bool SaveBufferToImage() const;
 
+		inline void NextRenderMode()
+		{
+			m_RenderMode = static_cast<RenderMode>((static_cast<int>(m_RenderMode) + 1) % (static_cast<int>(RenderMode::END)));
+		}
+
 	private:
+		enum class RenderMode
+		{
+			Default, Depth, END
+		};
+
 		SDL_Window* m_pWindow{};
 
 		SDL_Surface* m_pFrontBuffer{ nullptr };
@@ -44,16 +54,19 @@ namespace dae
 
 		Camera m_Camera{};
 
-		float m_AspectRatio{};
-
 		int m_Width{};
 		int m_Height{};
 
 		Texture* m_pTexture;
+		Mesh* m_pMesh;
+		RenderMode m_RenderMode{ RenderMode::Default };
+
+		bool m_F6Held{ false };
 
 		//Function that transforms the vertices from the mesh from World space to Screen space
 		void VertexTransformationFunction(const std::vector<Vertex>& vertices_in, std::vector<Vertex>& vertices_out) const; //W1 Version
 		void VertexTransformationFunction(const std::vector<Mesh>& meshes_in, std::vector<Mesh>& meshes_out) const;
+		void VertexTranformationFunction(Mesh& mesh);
 
 		// SDL_FillRect(m_pBackBuffer, NULL, SDL_MapRGB(m_pBackBuffer->format, 100, 100, 100 ));
 		inline void ClearBackground(){ SDL_FillRect(m_pBackBuffer, NULL, SDL_MapRGB(m_pBackBuffer->format, 100, 100, 100)); } const
