@@ -50,7 +50,9 @@ Renderer::~Renderer()
 void Renderer::Update(Timer* pTimer)
 {
 	m_Camera.Update(pTimer);
-	m_pMesh->RotateY(pTimer->GetElapsed());
+
+	const float rotationSpeed{ 30.f };
+	m_pMesh->RotateY(rotationSpeed * pTimer->GetElapsed());
 
 	const uint8_t* pKeyboardState = SDL_GetKeyboardState(nullptr);
 
@@ -67,8 +69,6 @@ void Renderer::Render()
 	//@START
 	//Lock BackBuffer
 	SDL_LockSurface(m_pBackBuffer);
-
-	VertexTranformationFunction(*m_pMesh);
 
 	// Define Triangles - Vertices in WORLD space
 	std::vector<Mesh> meshes_world;
@@ -107,14 +107,13 @@ void Renderer::Render()
 	//};
 
 	// For each mesh
-	for (const auto& mesh : meshes_world)
+	for (auto& mesh : meshes_world)
 	{
-		std::vector<Vertex> vertices_ndc{};
 		// World space --> NDC Space
-		VertexTransformationFunction(mesh.vertices, vertices_ndc);
+		VertexTransformationFunction(mesh);
 
 		std::vector<Vector2> vertices_raster;
-		for (const Vertex& ndcVertex : vertices_ndc)
+		for (const Vertex_Out& ndcVertex : mesh.vertices_out)
 		{
 			// Formula from slides
 			// NDC --> Screenspace
@@ -134,14 +133,14 @@ void Renderer::Render()
 				// For each triangle
 				for (int currStartVertIdx{0}; currStartVertIdx < mesh.indices.size(); currStartVertIdx += 3)
 				{
-					RenderMeshTriangle(mesh, vertices_raster, vertices_ndc, currStartVertIdx, false);
+					RenderMeshTriangle(mesh, vertices_raster, currStartVertIdx, false);
 				}
 				break;
 			case PrimitiveTopology::TriangleStrip:
 				// For each triangle
 				for (int currStartVertIdx{0}; currStartVertIdx < mesh.indices.size() - 2; ++currStartVertIdx)
 				{
-					RenderMeshTriangle(mesh, vertices_raster, vertices_ndc, currStartVertIdx, currStartVertIdx % 2);
+					RenderMeshTriangle(mesh, vertices_raster, currStartVertIdx, currStartVertIdx % 2);
 				}
 				break;
 			default:
@@ -195,7 +194,7 @@ void Renderer::VertexTransformationFunction(const std::vector<Mesh>& meshes_in, 
 	}
 }
 
-void dae::Renderer::VertexTranformationFunction(Mesh& mesh)
+void dae::Renderer::VertexTransformationFunction(Mesh& mesh)
 {
 	Matrix worldViewProjectionMatrix{ mesh.worldMatrix * m_Camera.viewMatrix * m_Camera.projectionMatrix };
 	mesh.vertices_out.clear();
@@ -217,7 +216,7 @@ void dae::Renderer::VertexTranformationFunction(Mesh& mesh)
 	}
 }
 
-void dae::Renderer::RenderMeshTriangle(const Mesh& mesh, const std::vector<Vector2>& vertices_raster, const std::vector<Vertex>& vertices_ndc, int currStartVertIdx, bool swapVertices)
+void dae::Renderer::RenderMeshTriangle(const Mesh& mesh, const std::vector<Vector2>& vertices_raster, int currStartVertIdx, bool swapVertices)
 {
 	const size_t vertIdx0{mesh.indices[currStartVertIdx + (2 * swapVertices)] };
 	const size_t vertIdx1{ mesh.indices[currStartVertIdx + 1] };
@@ -284,9 +283,9 @@ void dae::Renderer::RenderMeshTriangle(const Mesh& mesh, const std::vector<Vecto
 				weight1 *= invTotalTriangleArea;
 				weight2 *= invTotalTriangleArea;
 
-				const float depth0{ vertices_ndc[vertIdx0].position.z };
-				const float depth1{ vertices_ndc[vertIdx1].position.z };
-				const float depth2{ vertices_ndc[vertIdx2].position.z };
+				const float depth0{ mesh.vertices_out[vertIdx0].position.z };
+				const float depth1{ mesh.vertices_out[vertIdx1].position.z };
+				const float depth2{ mesh.vertices_out[vertIdx2].position.z };
 				const float interpolatedDepth{1.f / (weight0 * (1.f / depth0) + weight1 * (1.f / depth1) + weight2 * (1.f / depth2))};
 				if (m_pDepthBufferPixels[pixelIdx] < interpolatedDepth || interpolatedDepth < 0.f || interpolatedDepth > 1.f) continue;
 

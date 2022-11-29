@@ -43,7 +43,7 @@ namespace dae
 
 		inline bool ShouldVertexBeClipped(const Vector4& v) const
 		{
-			return v.x < -1.f || v.x > 1.f || v.y < -1.f || v.y > -1.f;
+			return v.x < -1.f || v.x > 1.f || v.y < -1.f || v.y > 1.f;
 		}
 
 		void Initialize(float _fovAngle = 90.f, Vector3 _origin = {0.f,0.f,0.f}, float _aspectRatio = 1.f)

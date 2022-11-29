@@ -66,7 +66,7 @@ namespace dae
 		//Function that transforms the vertices from the mesh from World space to Screen space
 		void VertexTransformationFunction(const std::vector<Vertex>& vertices_in, std::vector<Vertex>& vertices_out) const; //W1 Version
 		void VertexTransformationFunction(const std::vector<Mesh>& meshes_in, std::vector<Mesh>& meshes_out) const;
-		void VertexTranformationFunction(Mesh& mesh);
+		void VertexTransformationFunction(Mesh& mesh);
 
 		// SDL_FillRect(m_pBackBuffer, NULL, SDL_MapRGB(m_pBackBuffer->format, 100, 100, 100 ));
 		inline void ClearBackground(){ SDL_FillRect(m_pBackBuffer, NULL, SDL_MapRGB(m_pBackBuffer->format, 100, 100, 100)); } const
@@ -74,6 +74,6 @@ namespace dae
 		// std::fill_n(m_pDepthBufferPixels, (m_Width * m_Height), FLT_MAX);
 		inline void ResetDepthBuffer() { std::fill_n(m_pDepthBufferPixels, (m_Width * m_Height), FLT_MAX); }
 
-		void RenderMeshTriangle(const Mesh& mesh, const std::vector<Vector2>& vertices_raster, const std::vector<Vertex>& vertices_ndc, int currentVertexIdx, bool swapVertices);
+		void RenderMeshTriangle(const Mesh& mesh, const std::vector<Vector2>& vertices_raster, int currentVertexIdx, bool swapVertices);
 	};
 }
