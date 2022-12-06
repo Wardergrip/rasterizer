@@ -28,21 +28,31 @@ Renderer::Renderer(SDL_Window* pWindow) :
 	ResetDepthBuffer();
 
 	//Initialize Camera
-	m_Camera.Initialize(60.f, { .0f,.5f,-30.f }, static_cast<float>(m_Width) / m_Height);
+	m_Camera.Initialize(45.f, { .0f,.0f,.0f }, static_cast<float>(m_Width) / m_Height);
 
 	//Initialize Texture
-	m_pTexture = Texture::LoadFromFile("Resources/tuktuk.png");
+	m_pDiffuseTexture = Texture::LoadFromFile("Resources/vehicle_diffuse.png");
+	m_pSpecularTexture = Texture::LoadFromFile("Resources/vehicle_specular.png");
+	m_pGlossinessTexture = Texture::LoadFromFile("Resources/vehicle_gloss.png");
+	m_pNormalTexture = Texture::LoadFromFile("Resources/vehicle_normal.png");
 
 	//Initialize Mesh
 	m_pMesh = new Mesh();
-	Utils::ParseOBJ("Resources/tuktuk.obj", m_pMesh->vertices, m_pMesh->indices);
+	Utils::ParseOBJ("Resources/vehicle.obj", m_pMesh->vertices, m_pMesh->indices);
+	m_pMesh->Translate(0.f, 0.f, 50.f);
 }
 
 Renderer::~Renderer()
 {
 	delete[] m_pDepthBufferPixels;
-	delete m_pTexture;
-	m_pTexture = nullptr;
+	delete m_pDiffuseTexture;
+	m_pDiffuseTexture = nullptr;
+	delete m_pSpecularTexture;
+	m_pSpecularTexture = nullptr;
+	delete m_pGlossinessTexture;
+	m_pGlossinessTexture = nullptr;
+	delete m_pNormalTexture;
+	m_pNormalTexture = nullptr;
 	delete m_pMesh;
 	m_pMesh = nullptr;
 }
@@ -51,17 +61,77 @@ void Renderer::Update(Timer* pTimer)
 {
 	m_Camera.Update(pTimer);
 
-	const float rotationSpeed{ 30.f };
-	m_pMesh->RotateY(rotationSpeed * pTimer->GetElapsed());
+	constexpr const float rotationSpeed{ 30.f };
+	if (m_EnableRotating) m_pMesh->RotateY(rotationSpeed * pTimer->GetElapsed());
 
 	const uint8_t* pKeyboardState = SDL_GetKeyboardState(nullptr);
 
 	if (pKeyboardState[SDL_SCANCODE_F4])
 	{
-		if (!m_F6Held) NextRenderMode();
+		if (!m_F4Held)
+		{
+			NextRenderMode();
+			std::cout << "[RENDERMODE] ";
+			switch (m_RenderMode)
+			{
+			case dae::Renderer::RenderMode::Default:
+				std::cout << "Default\n";
+				break;
+			case dae::Renderer::RenderMode::Depth:
+				std::cout << "Depth\n";
+				break;
+			}
+		}
+		m_F4Held = true;
+	}
+	else m_F4Held = false;
+	if (pKeyboardState[SDL_SCANCODE_F5])
+	{
+		if (!m_F5Held)
+		{
+			m_EnableRotating = !m_EnableRotating;
+			std::cout << "[ROT] ";
+			std::cout << (m_EnableRotating ? "Rotation enabled\n" : "Rotation disabled\n");
+		}
+		m_F5Held = true;
+	}
+	else m_F5Held = false;
+	if (pKeyboardState[SDL_SCANCODE_F6])
+	{
+		if (!m_F6Held)
+		{
+			m_EnableNormalMap = !m_EnableNormalMap;
+			std::cout << "[NOR] ";
+			std::cout << (m_EnableNormalMap ? "NormalMap enabled\n" : "NormalMap disabled\n");
+		}
 		m_F6Held = true;
 	}
 	else m_F6Held = false;
+	if (pKeyboardState[SDL_SCANCODE_F7])
+	{
+		if (!m_F7Held)
+		{
+			NextShadeMode();
+			std::cout << "[SHADINGMODE] ";
+			switch (m_ShadingMode)
+			{
+			case dae::Renderer::ShadingMode::ObservedArea:
+				std::cout << "ObservedArea\n";
+				break;
+			case dae::Renderer::ShadingMode::Diffuse:
+				std::cout << "Diffuse\n";
+				break;
+			case dae::Renderer::ShadingMode::Specular:
+				std::cout << "Specular\n";
+				break;
+			case dae::Renderer::ShadingMode::Combined:
+				std::cout << "Combined\n";
+				break;
+			}
+		}
+		m_F7Held = true;
+	}
+	else m_F7Held = false;
 }
 
 void Renderer::Render()
@@ -156,44 +226,6 @@ void Renderer::Render()
 	SDL_UpdateWindowSurface(m_pWindow);
 }
 
-void Renderer::VertexTransformationFunction(const std::vector<Vertex>& vertices_in, std::vector<Vertex>& vertices_out) const
-{
-	vertices_out.reserve(vertices_in.size());
-
-	// World vertices --transform to--> NDC
-
-	// No const&, making a copy already
-	for (Vertex vertex : vertices_in)
-	{
-		vertex.position = m_Camera.invViewMatrix.TransformPoint(vertex.position);
-
-		vertex.position.x = (vertex.position.x / (m_Camera.aspectRatio * m_Camera.fov)) / vertex.position.z;
-		vertex.position.y = (vertex.position.y / m_Camera.fov) / vertex.position.z;
-
-		// Move instead of copy --> we made a copy already
-		vertices_out.emplace_back(vertex);
-	}
-}
-void Renderer::VertexTransformationFunction(const std::vector<Mesh>& meshes_in, std::vector<Mesh>& meshes_out) const
-{
-	meshes_out.reserve(meshes_in.size());
-	
-	// World vertices --transform to--> NDC
-
-	for (const Mesh& mesh : meshes_in)
-	{
-		std::vector<Vertex> vertices_out;
-		VertexTransformationFunction(mesh.vertices, vertices_out);
-		meshes_out.emplace_back(
-		Mesh{
-				vertices_out,
-				mesh.indices,
-				mesh.primitiveTopology
-			}
-		);
-	}
-}
-
 void dae::Renderer::VertexTransformationFunction(Mesh& mesh)
 {
 	Matrix worldViewProjectionMatrix{ mesh.worldMatrix * m_Camera.viewMatrix * m_Camera.projectionMatrix };
@@ -205,6 +237,11 @@ void dae::Renderer::VertexTransformationFunction(Mesh& mesh)
 		Vertex_Out vertex_out{ Vector4{}, v.color, v.uv, v.normal, v.tangent };
 
 		vertex_out.position = worldViewProjectionMatrix.TransformPoint({ v.position, 1.0f });
+		vertex_out.viewDirection = Vector3{ vertex_out.position.x, vertex_out.position.y, vertex_out.position.z }.Normalized();
+
+		vertex_out.normal = mesh.worldMatrix.TransformVector(v.normal);
+		vertex_out.tangent = mesh.worldMatrix.TransformVector(v.tangent);
+
 
 		const float invVw{1/vertex_out.position.w};
 		vertex_out.position.x *= invVw;
@@ -270,7 +307,7 @@ void dae::Renderer::RenderMeshTriangle(const Mesh& mesh, const std::vector<Vecto
 			const bool hitTriangle{ Utils::IsInTriangle(currentPixel,vert0,vert1,vert2) };
 			if (hitTriangle)
 			{
-				ColorRGB finalColor{};
+				
 				// weights
 				float weight0, weight1, weight2;
 				weight0 = Vector2::Cross((currentPixel - vert1), (vert1 - vert2));
@@ -291,31 +328,85 @@ void dae::Renderer::RenderMeshTriangle(const Mesh& mesh, const std::vector<Vecto
 
 				m_pDepthBufferPixels[pixelIdx] = interpolatedDepth;
 
-				switch (m_RenderMode)
-				{
-				case dae::Renderer::RenderMode::Default:
-					finalColor = m_pTexture->Sample(interpolatedDepth * ((weight0 * mesh.vertices[vertIdx0].uv) / depth0 + (weight1 * mesh.vertices[vertIdx1].uv) / depth1 + (weight2 * mesh.vertices[vertIdx2].uv) / depth2));
-					break;
-				case dae::Renderer::RenderMode::Depth:
-				{
-					const float depthCol{ Remap(interpolatedDepth,0.985f,1.f) };
-					finalColor = { depthCol,depthCol,depthCol };
-				}
-					break;
-				case dae::Renderer::RenderMode::END:
-					std::cout << "Something went terribly wrong, Rendermode is END\n";
-					break;
-				}
-				//Update Color in Buffer
-				finalColor.MaxToOne();
+				Vertex_Out pixel{};
+				pixel.position = { currentPixel.x,currentPixel.y, interpolatedDepth,interpolatedDepth };
+				pixel.uv = interpolatedDepth * ((weight0 * mesh.vertices[vertIdx0].uv) / depth0 + (weight1 * mesh.vertices[vertIdx1].uv) / depth1 + (weight2 * mesh.vertices[vertIdx2].uv) / depth2);
+				pixel.normal = Vector3{ interpolatedDepth * (weight0 * mesh.vertices_out[vertIdx0].normal / mesh.vertices_out[vertIdx0].position.w + weight1 * mesh.vertices_out[vertIdx1].normal / mesh.vertices_out[vertIdx1].position.w + weight2 * mesh.vertices_out[vertIdx2].normal / mesh.vertices_out[vertIdx2].position.w)}.Normalized();
+				pixel.tangent = Vector3{ interpolatedDepth * (weight0 * mesh.vertices_out[vertIdx0].tangent / mesh.vertices_out[vertIdx0].position.w + weight1 * mesh.vertices_out[vertIdx1].tangent / mesh.vertices_out[vertIdx1].position.w + weight2 * mesh.vertices_out[vertIdx2].tangent / mesh.vertices_out[vertIdx2].position.w)}.Normalized();
+				pixel.viewDirection = Vector3{interpolatedDepth * (weight0 * mesh.vertices_out[vertIdx0].viewDirection / mesh.vertices_out[vertIdx0].position.w +weight1 * mesh.vertices_out[vertIdx1].viewDirection / mesh.vertices_out[vertIdx1].position.w +weight2 * mesh.vertices_out[vertIdx2].viewDirection / mesh.vertices_out[vertIdx2].position.w)}.Normalized();
 
-				m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
-					static_cast<uint8_t>(finalColor.r * 255),
-					static_cast<uint8_t>(finalColor.g * 255),
-					static_cast<uint8_t>(finalColor.b * 255));
+				PixelShading(pixel);
 			}
 		}
 	}
+}
+
+void dae::Renderer::PixelShading(const Vertex_Out& v)
+{
+	Vector3 normal{v.normal};
+
+	ColorRGB finalColor{};
+
+	if (m_EnableNormalMap)
+	{
+		const Vector3 binormal = Vector3::Cross(v.normal, v.tangent);
+		const Matrix tangentSpaceAxis = Matrix{ v.tangent,binormal,v.normal,Vector3::Zero };
+
+		const ColorRGB normalSampleVecCol{ (2 * m_pNormalTexture->Sample(v.uv)) - ColorRGB{1,1,1} };
+		const Vector3 normalSampleVec{ normalSampleVecCol.r,normalSampleVecCol.g,normalSampleVecCol.b };
+		normal = tangentSpaceAxis.TransformVector(normalSampleVec);
+	}
+
+	switch (m_RenderMode)
+	{
+	case dae::Renderer::RenderMode::Default:
+	{
+		const float observedArea{ Vector3::DotClamp(normal.Normalized(), -m_GlobalLight.direction)};
+		finalColor = m_pDiffuseTexture->Sample(v.uv);
+		const ColorRGB lambert{ BRDF::Lambert(1.0f, m_pDiffuseTexture->Sample(v.uv)) };
+		const float specularVal{ m_SpecularShininess * m_pGlossinessTexture->Sample(v.uv).r };
+		const ColorRGB specular{ m_pSpecularTexture->Sample(v.uv) * BRDF::Phong(1.0f, specularVal, -m_GlobalLight.direction, v.viewDirection, normal) };
+
+		// += since finalColor is already a sample of the diffuse texture
+		switch (m_ShadingMode)
+		{
+		case dae::Renderer::ShadingMode::ObservedArea:
+			finalColor = ColorRGB{ observedArea, observedArea, observedArea };
+			break;
+		case dae::Renderer::ShadingMode::Diffuse:
+			finalColor += m_GlobalLight.intensity * observedArea * lambert;
+			break;
+		case dae::Renderer::ShadingMode::Specular:
+			finalColor += specular * observedArea;
+			break;
+		case dae::Renderer::ShadingMode::Combined:
+			finalColor += m_GlobalLight.intensity * observedArea * lambert + specular;
+			break;
+		}
+
+	}
+	break;
+	case dae::Renderer::RenderMode::Depth:
+	{
+		const float depthCol{ Remap(v.position.w,0.985f,1.f) };
+		finalColor = { depthCol,depthCol,depthCol };
+	}
+	break;
+	case dae::Renderer::RenderMode::END:
+		std::cout << "Something went terribly wrong, Rendermode is END\n";
+		break;
+	}
+
+	//Update Color in Buffer
+	finalColor.MaxToOne();
+
+	const int px{ static_cast<int>(v.position.x) };
+	const int py{ static_cast<int>(v.position.y) };
+
+	m_pBackBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBackBuffer->format,
+		static_cast<uint8_t>(finalColor.r * 255),
+		static_cast<uint8_t>(finalColor.g * 255),
+		static_cast<uint8_t>(finalColor.b * 255));
 }
 
 bool Renderer::SaveBufferToImage() const

@@ -187,4 +187,43 @@ namespace dae
 			return true;
 		}
 	}
+
+	namespace BRDF
+	{
+		/**
+		 * \param kd Diffuse Reflection Coefficient
+		 * \param cd Diffuse Color
+		 * \return Lambert Diffuse Color
+		 */
+		inline ColorRGB Lambert(float kd, const ColorRGB& cd)
+		{
+			return { (kd * cd) / PI };
+		}
+
+		inline ColorRGB Lambert(const ColorRGB& kd, const ColorRGB& cd)
+		{
+			return { (kd * cd) / PI };
+		}
+
+		/**
+		 * \brief todo
+		 * \param ks Specular Reflection Coefficient
+		 * \param exp Phong Exponent
+		 * \param l Incoming (incident) Light Direction
+		 * \param v View Direction
+		 * \param n Normal of the Surface
+		 * \return Phong Specular Color
+		 */
+		inline ColorRGB Phong(float ks, float exp, const Vector3& l, const Vector3& v, const Vector3& n)
+		{
+			Vector3 reflect = Vector3::Reflect(l, n);
+			float alfa = Vector3::DotClamp(reflect, v);
+			float PSR{};
+			if (alfa > 0)
+			{
+				PSR = ks * (powf(alfa, exp));
+			}
+			return { PSR,PSR,PSR };
+		}
+	}
 }
